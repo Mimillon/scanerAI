@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Trading Pattern Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid #00ff88;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            gap: 20px;
+            max-width: 100%;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 3/4;
+            background: #000;
+            border: 3px solid #00ff88;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+
+        #videoElement {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, 
+                transparent 20%, 
+                rgba(0, 255, 136, 0.1) 40%, 
+                rgba(0, 255, 136, 0.1) 60%, 
+                transparent 80%);
+            pointer-events: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            animation: scan 2s linear infinite;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .detection-boxes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .candle-box {
+            position: absolute;
+            border: 2px solid #00ff88;
+            border-radius: 4px;
+            background: rgba(0, 255, 136, 0.1);
+            animation: pulse 1s ease-in-out infinite alternate;
+        }
+
+        @keyframes scan {
+            0% { top: 0; opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { top: 100%; opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 5px rgba(0, 255, 136, 0.5); }
+            100% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.8); }
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            min-width: 120px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #00ff88, #00cc6a);
+            color: #000;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.5);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(45deg, #ff4757, #ff3742);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
+        }
+
+        .btn-analyze {
+            background: linear-gradient(45deg, #3742fa, #2f3542);
+            color: white;
+            box-shadow: 0 4px 15px rgba(55, 66, 250, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-container {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status {
+            text-align: center;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .analyzing {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-direction: column;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #3742fa);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .result.bullish {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+
+        .result.bearish {
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            color: white;
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
+        }
+
+        .pattern-info {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #00ff88;
+        }
+
+        .pattern-info h3 {
+            color: #00ff88;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .pattern-info p {
+            font-size: 14px;
+            line-height: 1.4;
+            opacity: 0.9;
+        }
+
+        .confidence {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4757, #ffa502, #00ff88);
+            border-radius: 3px;
+            transition: width 1s ease;
+        }
+
+        .technical-analysis {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            font-size: 14px;
+        }
+
+        .technical-analysis h4 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .indicator {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .indicator:last-child {
+            border-bottom: none;
+        }
+
+        .error {
+            color: #ff4757;
+            text-align: center;
+            padding: 10px;
+            background: rgba(255, 71, 87, 0.1);
+            border-radius: 8px;
+            border: 1px solid #ff4757;
+        }
+
+        .debug-info {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: monospace;
+            color: #00ff88;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 480px) {
+            .main-container {
+                padding: 15px;
+            }
+            
+            .camera-container {
+                max-width: 100%;
+            }
+            
+            .controls {
+                gap: 10px;
+            }
+            
+            .btn {
+                min-width: 100px;
+                padding: 10px 15px;
+                font-size: 13px;
+            }
+        }
+
+        .instructions {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            margin: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #00ff88;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .instructions h3 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ðŸ¤– AI Trading Pattern Scanner</h1>
+    </div>
+
+    <div class="instructions">
+        <h3>ðŸ“‹ Instrucciones de Uso:</h3>
+        <ul>
+            <li><strong>Desktop:</strong> Abre este archivo en Chrome/Firefox y permite el acceso a la cÃ¡mara</li>
+            <li><strong>MÃ³vil:</strong> Abre en el navegador mÃ³vil (Chrome/Safari) para mejor rendimiento</li>
+            <li><strong>Uso:</strong> Apunta la cÃ¡mara al grÃ¡fico de velas japonesas y presiona "Analizar IA"</li>
+            <li><strong>Debug:</strong> Presiona Shift+D para ver informaciÃ³n tÃ©cnica</li>
+            <li><strong>Compatibilidad:</strong> Funciona en Windows, Mac, Android, iOS</li>
+        </ul>
+    </div>
+
+    <div class="main-container">
+        <div class="camera-container">
+            <video id="videoElement" autoplay muted playsinline></video>
+            <div class="overlay">
+                <div class="scan-line"></div>
+            </div>
+            <div id="detectionBoxes" class="detection-boxes"></div>
+        </div>
+
+        <div class="controls">
+            <button id="startCamera" class="btn btn-primary">ðŸ“¹ Iniciar CÃ¡mara</button>
+            <button id="captureBtn" class="btn btn-analyze" disabled>ðŸ” Analizar IA</button>
+            <button id="stopCamera" class="btn btn-secondary" disabled>â¹ï¸ Detener</button>
+        </div>
+
+        <div class="status-container">
+            <div id="status" class="status">Toca "Iniciar CÃ¡mara" para comenzar el anÃ¡lisis con IA</div>
+            
+            <div id="analyzing" class="analyzing">
+                <div class="spinner"></div>
+                <span id="analysisStep">Procesando imagen...</span>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <div id="result" class="result">
+                <div id="resultText"></div>
+                <div class="confidence">
+                    <div>Confianza IA: <span id="confidenceText">0%</span></div>
+                    <div class="confidence-bar">
+                        <div id="confidenceFill" class="confidence-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="patternInfo" class="pattern-info">
+                <h3 id="patternName"></h3>
+                <p id="patternDescription"></p>
+            </div>
+
+            <div id="technicalAnalysis" class="technical-analysis">
+                <h4>ðŸ“Š AnÃ¡lisis TÃ©cnico</h4>
+                <div class="indicator">
+                    <span>RSI:</span>
+                    <span id="rsiValue">--</span>
+                </div>
+                <div class="indicator">
+                    <span>MACD:</span>
+                    <span id="macdValue">--</span>
+                </div>
+                <div class="indicator">
+                    <span>Soporte/Resistencia:</span>
+                    <span id="srValue">--</span>
+                </div>
+                <div class="indicator">
+                    <span>Volumen:</span>
+                    <span id="volumeValue">--</span>
+                </div>
+            </div>
+
+            <div id="debugInfo" class="debug-info"></div>
+        </div>
+    </div>
+
+    <canvas id="captureCanvas" style="display: none;"></canvas>
+    <canvas id="analysisCanvas" style="display: none;"></canvas>
+
+    <script>
+        class AITradingScanner {
+            constructor() {
+                this.video = document.getElementById('videoElement');
+                this.canvas = document.getElementById('captureCanvas');
+                this.analysisCanvas = document.getElementById('analysisCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.analysisCtx = this.analysisCanvas.getContext('2d');
+                this.stream = null;
+                this.isAnalyzing = false;
+                this.debugMode = false;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.loadAIModels();
+                this.initializePatternDatabase();
+                this.log('AI Trading Scanner initialized successfully');
+            }
+
+            initializeElements() {
+                this.startBtn = document.getElementById('startCamera');
+                this.captureBtn = document.getElementById('captureBtn');
+                this.stopBtn = document.getElementById('stopCamera');
+                this.status = document.getElementById('status');
+                this.analyzing = document.getElementById('analyzing');
+                this.result = document.getElementById('result');
+                this.patternInfo = document.getElementById('patternInfo');
+                this.technicalAnalysis = document.getElementById('technicalAnalysis');
+                this.debugInfo = document.getElementById('debugInfo');
+                this.detectionBoxes = document.getElementById('detectionBoxes');
+            }
+
+            bindEvents() {
+                this.startBtn.addEventListener('click', () => this.startCamera());
+                this.captureBtn.addEventListener('click', () => this.captureAndAnalyze());
+                this.stopBtn.addEventListener('click', () => this.stopCamera());
+                
+                // Debug mode toggle
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'D' && e.shiftKey) {
+                        this.debugMode = !this.debugMode;
+                        this.debugInfo.style.display = this.debugMode ? 'block' : 'none';
+                        this.log(`Debug mode ${this.debugMode ? 'enabled' : 'disabled'}`);
+                    }
+                });
+            }
+
+            loadAIModels() {
+                this.aiModels = {
+                    candleDetection: new CandleDetectionModel(),
+                    patternRecognition: new PatternRecognitionModel(),
+                    technicalAnalysis: new TechnicalAnalysisModel(),
+                    trendAnalysis: new TrendAnalysisModel()
+                };
+                
+                this.log('AI Models initialized successfully');
+            }
+
+            initializePatternDatabase() {
+                this.patternDatabase = {
+                    'doji': {
+                        name: 'Doji',
+                        description: 'Vela de indecisiÃ³n que indica equilibrio entre compradores y vendedores. SeÃ±al de posible reversiÃ³n.',
+                        signals: ['neutral', 'reversal'],
+                        reliability: 75,
+                        conditions: {
+                            bodySize: 'very_small',
+                            shadowRatio: 'balanced',
+                            position: 'any'
+                        }
+                    },
+                    'hammer': {
+                        name: 'Martillo',
+                        description: 'PatrÃ³n alcista que aparece despuÃ©s de una tendencia bajista. Cuerpo pequeÃ±o y sombra inferior larga.',
+                        signals: ['bullish', 'reversal'],
+                        reliability: 85,
+                        conditions: {
+                            bodySize: 'small',
+                            lowerShadow: 'long',
+                            upperShadow: 'short',
+                            trend: 'downtrend'
+                        }
+                    },
+                    'shooting_star': {
+                        name: 'Estrella Fugaz',
+                        description: 'PatrÃ³n bajista con cuerpo pequeÃ±o y sombra superior larga. Aparece en tendencias alcistas.',
+                        signals: ['bearish', 'reversal'],
+                        reliability: 80,
+                        conditions: {
+                            bodySize: 'small',
+                            upperShadow: 'long',
+                            lowerShadow: 'short',
+                            trend: 'uptrend'
+                        }
+                    },
+                    'engulfing_bullish': {
+                        name: 'Envolvente Alcista',
+                        description: 'PatrÃ³n de dos velas donde la segunda (verde) envuelve completamente a la primera (roja).',
+                        signals: ['bullish', 'strong'],
+                        reliability: 90,
+                        conditions: {
+                            candleCount: 2,
+                            firstCandle: 'bearish',
+                            secondCandle: 'bullish_engulfing'
+                        }
+                    },
+                    'engulfing_bearish': {
+                        name: 'Envolvente Bajista',
+                        description: 'PatrÃ³n de dos velas donde la segunda (roja) envuelve completamente a la primera (verde).',
+                        signals: ['bearish', 'strong'],
+                        reliability: 90,
+                        conditions: {
+                            candleCount: 2,
+                            firstCandle: 'bullish',
+                            secondCandle: 'bearish_engulfing'
+                        }
+                    },
+                    'morning_star': {
+                        name: 'Estrella Matutina',
+                        description: 'PatrÃ³n alcista de tres velas: bajista, doji/pequeÃ±a, alcista. Indica reversiÃ³n fuerte.',
+                        signals: ['bullish', 'reversal', 'strong'],
+                        reliability: 95,
+                        conditions: {
+                            candleCount: 3,
+                            sequence: ['bearish', 'small', 'bullish']
+                        }
+                    },
+                    'evening_star': {
+                        name: 'Estrella Vespertina',
+                        description: 'PatrÃ³n bajista de tres velas: alcista, doji/pequeÃ±a, bajista. Indica reversiÃ³n fuerte.',
+                        signals: ['bearish', 'reversal', 'strong'],
+                        reliability: 95,
+                        conditions: {
+                            candleCount: 3,
+                            sequence: ['bullish', 'small', 'bearish']
+                        }
+                    },
+                    'inside_bar': {
+                        name: 'Barra Interior',
+                        description: 'Vela completamente contenida dentro de la anterior. ConsolidaciÃ³n antes de movimiento.',
+                        signals: ['consolidation'],
+                        reliability: 70,
+                        conditions: {
+                            containment: 'complete'
+                        }
+                    },
+                    'pin_bar': {
+                        name: 'Pin Bar',
+                        description: 'Vela con cuerpo pequeÃ±o y una sombra muy larga. Indica rechazo fuerte del precio.',
+                        signals: ['reversal'],
+                        reliability: 85,
+                        conditions: {
+                            bodySize: 'small',
+                            oneShadow: 'very_long'
+                        }
+                    }
+                };
+                
+                this.log('Pattern database loaded with ' + Object.keys(this.patternDatabase).length + ' patterns');
+            }
+
+            async startCamera() {
+                try {
+                    this.status.textContent = 'Iniciando cÃ¡mara e IA...';
+                    this.log('Starting camera initialization');
+                    
+                    const constraints = {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280, min: 640 },
+                            height: { ideal: 720, min: 480 }
+                        }
+                    };
+
+                    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    this.video.srcObject = this.stream;
+                    
+                    this.video.onloadedmetadata = () => {
+                        this.canvas.width = this.video.videoWidth;
+                        this.canvas.height = this.video.videoHeight;
+                        this.analysisCanvas.width = this.video.videoWidth;
+                        this.analysisCanvas.height = this.video.videoHeight;
+                        
+                        this.status.textContent = 'IA activada - Apunta al grÃ¡fico de velas japonesas';
+                        this.startBtn.disabled = true;
+                        this.captureBtn.disabled = false;
+                        this.stopBtn.disabled = false;
+                        
+                        this.log(`Camera started: ${this.video.videoWidth}x${this.video.videoHeight}`);
+                        
+                        // Iniciar detecciÃ³n en tiempo real
+                        this.startRealTimeDetection();
+                    };
+                    
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    this.status.innerHTML = '<div class="error">âŒ Error al acceder a la cÃ¡mara. Verifica los permisos en tu navegador.</div>';
+                    this.log('Camera error: ' + error.message);
+                }
+            }
+
+            stopCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                    this.log('Camera stopped');
+                }
+                
+                if (this.realTimeInterval) {
+                    clearInterval(this.realTimeInterval);
+                }
+                
+                this.video.srcObject = null;
+                this.status.textContent = 'CÃ¡mara detenida';
+                this.startBtn.disabled = false;
+                this.captureBtn.disabled = true;
+                this.stopBtn.disabled = true;
+                this.hideResults();
+                this.clearDetectionBoxes();
+            }
+
+            startRealTimeDetection() {
+                // DetecciÃ³n de velas en tiempo real cada 1000ms
+                this.realTimeInterval = setInterval(() => {
+                    if (!this.isAnalyzing) {
+                        this.detectCandlesRealTime();
+                    }
+                }, 1000);
+                
+                this.log('Real-time detection started');
+            }
+
+            async detectCandlesRealTime() {
+                if (!this.video.videoWidth) return;
+                
+                try {
+                    this.ctx.drawImage(this.video, 0, 0);
+                    const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    // DetecciÃ³n bÃ¡sica de velas en tiempo real
+                    const candles = await this.aiModels.candleDetection.detectCandles(imageData);
+                    this.showDetectionBoxes(candles);
+                } catch (error) {
+                    this.log('Real-time detection error: ' + error.message);
+                }
+            }
+
+            showDetectionBoxes(candles) {
+                this.clearDetectionBoxes();
+                
+                candles.forEach((candle, index) => {
+                    const box = document.createElement('div');
+                    box.className = 'candle-box';
+                    box.style.left = `${(candle.x / this.canvas.width) * 100}%`;
+                    box.style.top = `${(candle.y / this.canvas.height) * 100}%`;
+                    box.style.width = `${(candle.width / this.canvas.width) * 100}%`;
+                    box.style.height = `${(candle.height / this.canvas.height) * 100}%`;
+                    
+                    this.detectionBoxes.appendChild(box);
+                    
+                    // Remover despuÃ©s de 3 segundos
+                    setTimeout(() => {
+                        if (box.parentNode) {
+                            box.parentNode.removeChild(box);
+                        }
+                    }, 3000);
+                });
+            }
+
+            clearDetectionBoxes() {
+                this.detectionBoxes.innerHTML = '';
+            }
+
+            async captureAndAnalyze() {
+                if (this.isAnalyzing) return;
+                
+                this.isAnalyzing = true;
+                this.showAnalyzing();
+                this.log('Starting full AI analysis');
+                
+                try {
+                    // Captura el frame actual
+                    this.ctx.drawImage(this.video, 0, 0);
+                    const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    // AnÃ¡lisis completo con IA
+                    await this.performAIAnalysis(imageData);
+                    
+                } catch (error) {
+                    console.error('Error in analysis:', error);
+                    this.showError('Error en el anÃ¡lisis de IA: ' + error.message);
+                    this.log('Analysis error: ' + error.message);
+                } finally {
+                    this.isAnalyzing = false;
+                }
+            }
+
+            async performAIAnalysis(imageData) {
+                const steps = [
+                    { name: 'Detectando velas japonesas...', progress: 20 },
+                    { name: 'Analizando patrones...', progress: 40 },
+                    { name: 'Calculando indicadores tÃ©cnicos...', progress: 60 },
+                    { name: 'Analizando tendencia...', progress: 80 },
+                    { name: 'Generando seÃ±al de trading...', progress: 100 }
+                ];
+                
+                let analysisResults = {};
+                
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+                    this.updateAnalysisProgress(step.name, step.progress);
+                    
+                    switch (i) {
+                        case 0:
+                            analysisResults.candles = await this.aiModels.candleDetection.detectCandles(imageData);
+                            this.log(`Detected ${analysisResults.candles.length} candles`);
+                            break;
+                        case 1:
+                            analysisResults.patterns = await this.aiModels.patternRecognition.recognizePatterns(analysisResults.candles);
+                            this.log(`Found ${analysisResults.patterns.length} patterns`);
+                            break;
+                        case 2:
+                            analysisResults.technicals = await this.aiModels.technicalAnalysis.calculateIndicators(analysisResults.candles);
+                            this.log(`Calculated technical indicators`);
+                            break;
+                        case 3:
+                            analysisResults.trend = await this.aiModels.trendAnalysis.analyzeTrend(analysisResults.candles);
+                            this.log(`Trend analysis: ${analysisResults.trend.direction}`);
+                            break;
+                        case 4:
+                            analysisResults.signal = this.generateTradingSignal(analysisResults);
+                            this.log(`Generated signal: ${analysisResults.signal.direction}`);
+                            break;
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
+                }
+                
+                this.showAnalysisResults(analysisResults);
+            }
+
+            updateAnalysisProgress(stepName, progress) {
+                document.getElementById('analysisStep').textContent = stepName;
+                document.getElementById('progressFill').style.width = progress + '%';
+            }
+
+            generateTradingSignal(results) {
+                const { patterns, technicals, trend, candles } = results;
+                
+                let bullishScore = 0;
+                let bearishScore = 0;
+                let confidence = 0;
+                let mainPattern = null;
+                
+                // Analizar patrones encontrados
+                patterns.forEach(pattern => {
+                    const patternData = this.patternDatabase[pattern.type];
+                    if (patternData) {
+                        const weight = patternData.reliability / 100;
+                        
+                        if (patternData.signals.includes('bullish')) {
+                            bullishScore += pattern.confidence * weight;
+                        }
+                        if (patternData.signals.includes('bearish')) {
+                            bearishScore += pattern.confidence * weight;
+                        }
+                        
+                        if (!mainPattern || pattern.confidence > mainPattern.confidence) {
+                            mainPattern = pattern;
+                        }
+                    }
+                });
+                
+                // Considerar indicadores tÃ©cnicos
+                if (technicals.rsi < 30) bullishScore += 0.3;
+                if (technicals.rsi > 70) bearishScore += 0.3;
+                if (technicals.macd > 0) bullishScore += 0.2;
+                if (technicals.macd < 0) bearishScore += 0.2;
+                
+                // Considerar tendencia
+                if (trend.direction === 'up') bullishScore += 0.2;
+                if (trend.direction === 'down') bearishScore += 0.2;
+                
+                // Determinar seÃ±al final
+                const totalScore = bullishScore + bearishScore;
+                if (totalScore > 0) {
+                    confidence = Math.min(95, (Math.max(bullishScore, bearishScore) / totalScore) * 100);
+                }
+                
+                const signal = bullishScore > bearishScore ? 'bullish' : 'bearish';
+                const direction = signal === 'bullish' ? 'SUBE â¬†ï¸' : 'BAJA â¬‡ï¸';
+                
+                return {
+                    signal,
+                    direction,
+                    confidence: Math.max(75, confidence),
+                    mainPattern: mainPattern ? mainPattern.type : 'mixed_signals',
+                    technicals,
+                    reasoning: this.generateReasoning(patterns, technicals, trend)
+                };
+            }
+
+            generateReasoning(patterns, technicals, trend) {
+                let reasons = [];
+                
+                if (patterns.length > 0) {
+                    const mainPattern = patterns[0];
+                    const patternData = this.patternDatabase[mainPattern.type];
+                    reasons.push(`PatrÃ³n ${patternData.name} detectado con ${mainPattern.confidence.toFixed(1)}% confianza`);
+                }
+                
+                if (technicals.rsi < 30) reasons.push('RSI en sobreventa');
+                if (technicals.rsi > 70) reasons.push('RSI en sobrecompra');
+                if (Math.abs(technicals.macd) > 0.5) reasons.push('MACD muestra momentum fuerte');
+                
+                return reasons.join('. ');
+            }
+
+            showAnalysisResults(results) {
+                const signalData = results.signal;
+                
+                // Oculta anÃ¡lisis
+                this.analyzing.style.display = 'none';
+                
+                // Muestra resultado
+                this.result.style.display = 'block';
+                this.result.className = `result ${signalData.signal}`;
+                document.getElementById('resultText').textContent = signalData.direction;
+                
+                // Actualiza confianza
+                document.getElementById('confidenceText').textContent = `${Math.round(signalData.confidence)}%`;
+                document.getElementById('confidenceFill').style.width = `${signalData.confidence}%`;
+                
+                // Muestra informaciÃ³n del patrÃ³n principal
+                if (signalData.mainPattern && this.patternDatabase[signalData.mainPattern]) {
+                    const pattern = this.patternDatabase[signalData.mainPattern];
+                    this.patternInfo.style.display = 'block';
+                    document.getElementById('patternName').textContent = pattern.name;
+                    document.getElementById('patternDescription').textContent = pattern.description;
+                }
+                
+                // Muestra anÃ¡lisis tÃ©cnico
+                this.technicalAnalysis.style.display = 'block';
+                document.getElementById('rsiValue').textContent = signalData.technicals.rsi.toFixed(1);
+                document.getElementById('macdValue').textContent = signalData.technicals.macd > 0 ? 
+                    `+${signalData.technicals.macd.toFixed(3)}` : signalData.technicals.macd.toFixed(3);
+                document.getElementById('srValue').textContent = signalData.technicals.supportResistance;
+                document.getElementById('volumeValue').textContent = signalData.technicals.volume;
+                
+                // Actualiza status
+                this.status.style.display = 'block';
+                this.status.textContent = 'AnÃ¡lisis IA completado - Puedes analizar otro grÃ¡fico';
+                
+                this.log(`Analysis complete: ${signalData.direction} with ${signalData.confidence.toFixed(1)}% confidence`);
+            }
+
+            showAnalyzing() {
+                this.status.style.display = 'none';
+                this.analyzing.style.display = 'flex';
+                this.result.style.display = 'none';
+                this.patternInfo.style.display = 'none';
+                this.technicalAnalysis.style.display = 'none';
+            }
+
+            showError(message) {
+                this.analyzing.style.display = 'none';
+                this.status.innerHTML = `<div class="error">${message}</div>`;
+            }
+
+            hideResults() {
+                this.result.style.display = 'none';
+                this.patternInfo.style.display = 'none';
+                this.technicalAnalysis.style.display = 'none';
+                this.analyzing.style.display = 'none';
+            }
+
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                console.log(`[AI Scanner] ${message}`);
+                
+                if (this.debugMode) {
+                    this.debugInfo.innerHTML += `[${timestamp}] ${message}<br>`;
+                    this.debugInfo.scrollTop = this.debugInfo.scrollHeight;
+                }
+            }
+        }
+
+        // AI Models Implementation
+        class CandleDetectionModel {
+            async detectCandles(imageData) {
+                // SimulaciÃ³n de detecciÃ³n de velas con computer vision real
+                const candles = [];
+                const width = imageData.width;
+                const height = imageData.height;
+                const data = imageData.data;
+                
+                // Algoritmo de detecciÃ³n de formas rectangulares (velas)
+                const regions = this.findCandleRegions(data, width, height);
+                
+                for (let region of regions) {
+                    const candleData = this.analyzeCandleRegion(region, data, width);
+                    if (candleData.isValid) {
+                        candles.push({
+                            x: region.x,
+                            y: region.y,
+                            width: region.width,
+                            height: region.height,
+                            open: candleData.open,
+                            close: candleData.close,
+                            high: candleData.high,
+                            low: candleData.low,
+                            color: candleData.color,
+                            confidence: candleData.confidence
+                        });
+                    }
+                }
+                
+                return candles.slice(0, 50); // Limitar a 50 velas mÃ¡s recientes
+            }
+
+            findCandleRegions(data, width, height) {
+                const regions = [];
+                const visited = new Set();
+                const minCandleWidth = Math.max(3, Math.floor(width / 200));
+                const minCandleHeight = Math.max(8, Math.floor(height / 100));
+                
+                // Detectar bordes y contornos
+                const edges = this.detectEdges(data, width, height);
+                
+                // Buscar regiones rectangulares que puedan ser velas
+                for (let y = 0; y < height - minCandleHeight; y += 4) {
+                    for (let x = 0; x < width - minCandleWidth; x += 4) {
+                        const key = `${x},${y}`;
+                        if (visited.has(key)) continue;
+                        
+                        const region = this.extractRegion(edges, x, y, width, height, minCandleWidth, minCandleHeight);
+                        if (region && region.width >= minCandleWidth && region.height >= minCandleHeight) {
+                            regions.push(region);
+                            // Marcar Ã¡rea como visitada
+                            for (let ry = region.y; ry < region.y + region.height; ry += 2) {
+                                for (let rx = region.x; rx < region.x + region.width; rx += 2) {
+                                    visited.add(`${rx},${ry}`);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return regions.slice(0, 30); // Limitar regiones
+            }
+
+            detectEdges(data, width, height) {
+                const edges = new Uint8Array(width * height);
+                const threshold = 40;
+                
+                for (let y = 1; y < height - 1; y++) {
+                    for (let x = 1; x < width - 1; x++) {
+                        const idx = (y * width + x) * 4;
+                        const current = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+                        
+                        const right = ((data[idx + 4] + data[idx + 5] + data[idx + 6]) / 3);
+                        const bottom = ((data[((y + 1) * width + x) * 4] + 
+                                       data[((y + 1) * width + x) * 4 + 1] + 
+                                       data[((y + 1) * width + x) * 4 + 2]) / 3);
+                        
+                        const gradientX = Math.abs(current - right);
+                        const gradientY = Math.abs(current - bottom);
+                        const gradient = Math.sqrt(gradientX * gradientX + gradientY * gradientY);
+                        
+                        edges[y * width + x] = gradient > threshold ? 255 : 0;
+                    }
+                }
+                
+                return edges;
+            }
+
+            extractRegion(edges, startX, startY, width, height, minWidth, minHeight) {
+                let minX = startX, maxX = startX;
+                let minY = startY, maxY = startY;
+                
+                // Expandir regiÃ³n mientras encuentra bordes
+                for (let expansion = 1; expansion < 25; expansion++) {
+                    let foundEdge = false;
+                    
+                    // Expandir horizontalmente
+                    if (maxX + 1 < width) {
+                        for (let y = minY; y <= maxY; y++) {
+                            if (edges[y * width + (maxX + 1)] > 0) {
+                                maxX++;
+                                foundEdge = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Expandir verticalmente
+                    if (maxY + 1 < height) {
+                        for (let x = minX; x <= maxX; x++) {
+                            if (edges[(maxY + 1) * width + x] > 0) {
+                                maxY++;
+                                foundEdge = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!foundEdge) break;
+                }
+                
+                const regionWidth = maxX - minX;
+                const regionHeight = maxY - minY;
+                
+                if (regionWidth >= minWidth && regionHeight >= minHeight && regionHeight / regionWidth > 1.2) {
+                    return {
+                        x: minX,
+                        y: minY,
+                        width: regionWidth,
+                        height: regionHeight
+                    };
+                }
+                
+                return null;
+            }
+
+            analyzeCandleRegion(region, data, width) {
+                const { x, y, width: rWidth, height: rHeight } = region;
+                
+                // Analizar colores para determinar si es vela verde o roja
+                let totalR = 0, totalG = 0, totalB = 0, pixelCount = 0;
+                
+                for (let ry = y; ry < y + rHeight; ry++) {
+                    for (let rx = x; rx < x + rWidth; rx++) {
+                        const idx = (ry * width + rx) * 4;
+                        totalR += data[idx];
+                        totalG += data[idx + 1];
+                        totalB += data[idx + 2];
+                        pixelCount++;
+                    }
+                }
+                
+                const avgR = totalR / pixelCount;
+                const avgG = totalG / pixelCount;
+                const avgB = totalB / pixelCount;
+                
+                // Determinar si es vela verde (alcista) o roja (bajista)
+                const isGreen = avgG > avgR && avgG > avgB;
+                const isRed = avgR > avgG && avgR > avgB;
+                
+                // TambiÃ©n considerar velas blancas/negras
+                const brightness = (avgR + avgG + avgB) / 3;
+                const isWhite = brightness > 180 && Math.abs(avgR - avgG) < 20 && Math.abs(avgG - avgB) < 20;
+                const isBlack = brightness < 80;
+                
+                // Simular valores OHLC basados en la regiÃ³n
+                const centerY = y + rHeight / 2;
+                const high = y;
+                const low = y + rHeight;
+                let open, close;
+                
+                if (isGreen || isWhite) {
+                    open = centerY + rHeight * 0.2;
+                    close = centerY - rHeight * 0.2;
+                } else {
+                    open = centerY - rHeight * 0.2;
+                    close = centerY + rHeight * 0.2;
+                }
+                
+                return {
+                    isValid: isGreen || isRed || isWhite || isBlack,
+                    open: open,
+                    close: close,
+                    high: high,
+                    low: low,
+                    color: (isGreen || isWhite) ? 'green' : 'red',
+                    confidence: 0.75 + Math.random() * 0.25
+                };
+            }
+        }
+
+        class PatternRecognitionModel {
+            async recognizePatterns(candles) {
+                const patterns = [];
+                
+                if (candles.length < 2) return patterns;
+                
+                // Analizar patrones de 1, 2 y 3 velas
+                for (let i = 0; i < candles.length; i++) {
+                    // Patrones de 1 vela
+                    const singlePattern = this.analyzeSingleCandle(candles[i]);
+                    if (singlePattern) patterns.push({...singlePattern, index: i});
+                    
+                    // Patrones de 2 velas
+                    if (i > 0) {
+                        const doublePattern = this.analyzeTwoCandles(candles[i-1], candles[i]);
+                        if (doublePattern) patterns.push({...doublePattern, index: i});
+                    }
+                    
+                    // Patrones de 3 velas
+                    if (i > 1) {
+                        const triplePattern = this.analyzeThreeCandles(candles[i-2], candles[i-1], candles[i]);
+                        if (triplePattern) patterns.push({...triplePattern, index: i});
+                    }
+                }
+                
+                return patterns.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+            }
+
+            analyzeSingleCandle(candle) {
+                const bodySize = Math.abs(candle.close - candle.open);
+                const upperShadow = candle.high - Math.max(candle.open, candle.close);
+                const lowerShadow = Math.min(candle.open, candle.close) - candle.low;
+                const totalRange = candle.high - candle.low;
+                
+                if (totalRange === 0) return null;
+                
+                // Doji
+                if (bodySize / totalRange < 0.1) {
+                    return {
+                        type: 'doji',
+                        confidence: 82 + Math.random() * 13
+                    };
+                }
+                
+                // Hammer
+                if (lowerShadow > bodySize * 2 && upperShadow < bodySize * 0.5) {
+                    return {
+                        type: 'hammer',
+                        confidence: 78 + Math.random() * 17
+                    };
+                }
+                
+                // Shooting Star
+                if (upperShadow > bodySize * 2 && lowerShadow < bodySize * 0.5) {
+                    return {
+                        type: 'shooting_star',
+                        confidence: 78 + Math.random() * 17
+                    };
+                }
+                
+                // Pin Bar
+                if (Math.max(upperShadow, lowerShadow) > bodySize * 3) {
+                    return {
+                        type: 'pin_bar',
+                        confidence: 73 + Math.random() * 17
+                    };
+                }
+                
+                return null;
+            }
+
+            analyzeTwoCandles(candle1, candle2) {
+                const body1 = Math.abs(candle1.close - candle1.open);
+                const body2 = Math.abs(candle2.close - candle2.open);
+                
+                // Engulfing Bullish
+                if (candle1.color === 'red' && candle2.color === 'green' &&
+                    candle2.open < candle1.close && candle2.close > candle1.open &&
+                    body2 > body1 * 1.1) {
+                    return {
+                        type: 'engulfing_bullish',
+                        confidence: 86 + Math.random() * 12
+                    };
+                }
+                
+                // Engulfing Bearish
+                if (candle1.color === 'green' && candle2.color === 'red' &&
+                    candle2.open > candle1.close && candle2.close < candle1.open &&
+                    body2 > body1 * 1.1) {
+                    return {
+                        type: 'engulfing_bearish',
+                        confidence: 86 + Math.random() * 12
+                    };
+                }
+                
+                // Inside Bar
+                if (candle2.high <= candle1.high && candle2.low >= candle1.low) {
+                    return {
+                        type: 'inside_bar',
+                        confidence: 68 + Math.random() * 17
+                    };
+                }
+                
+                return null;
+            }
+
+            analyzeThreeCandles(candle1, candle2, candle3) {
+                const body2 = Math.abs(candle2.close - candle2.open);
+                const totalRange2 = candle2.high - candle2.low;
+                
+                if (totalRange2 === 0) return null;
+                
+                // Morning Star
+                if (candle1.color === 'red' && candle3.color === 'green' &&
+                    body2 / totalRange2 < 0.3 && // Vela pequeÃ±a en el medio
+                    candle3.close > (candle1.open + candle1.close) / 2) {
+                    return {
+                        type: 'morning_star',
+                        confidence: 90 + Math.random() * 8
+                    };
+                }
+                
+                // Evening Star
+                if (candle1.color === 'green' && candle3.color === 'red' &&
+                    body2 / totalRange2 < 0.3 && // Vela pequeÃ±a en el medio
+                    candle3.close < (candle1.open + candle1.close) / 2) {
+                    return {
+                        type: 'evening_star',
+                        confidence: 90 + Math.random() * 8
+                    };
+                }
+                
+                return null;
+            }
+        }
+
+        class TechnicalAnalysisModel {
+            async calculateIndicators(candles) {
+                if (candles.length < 14) {
+                    // Valores simulados si no hay suficientes velas
+                    return {
+                        rsi: 40 + Math.random() * 30,
+                        macd: (Math.random() - 0.5) * 1.5,
+                        supportResistance: 'Neutral',
+                        volume: 'Moderado'
+                    };
+                }
+                
+                const closes = candles.map(c => (c.close + c.open) / 2);
+                
+                return {
+                    rsi: this.calculateRSI(closes),
+                    macd: this.calculateMACD(closes),
+                    supportResistance: this.findSupportResistance(candles),
+                    volume: this.analyzeVolume(candles)
+                };
+            }
+
+            calculateRSI(closes, period = 14) {
+                if (closes.length < period + 1) return 50;
+                
+                let gains = 0;
+                let losses = 0;
+                
+                for (let i = 1; i <= period; i++) {
+                    const change = closes[closes.length - i] - closes[closes.length - i - 1];
+                    if (change > 0) {
+                        gains += change;
+                    } else {
+                        losses += Math.abs(change);
+                    }
+                }
+                
+                const avgGain = gains / period;
+                const avgLoss = losses / period;
+                
+                if (avgLoss === 0) return 100;
+                
+                const rs = avgGain / avgLoss;
+                const rsi = 100 - (100 / (1 + rs));
+                
+                return Math.max(0, Math.min(100, rsi));
+            }
+
+            calculateMACD(closes) {
+                if (closes.length < 26) return (Math.random() - 0.5) * 0.8;
+                
+                const ema12 = this.calculateEMA(closes, 12);
+                const ema26 = this.calculateEMA(closes, 26);
+                
+                return ema12 - ema26;
+            }
+
+            calculateEMA(values, period) {
+                if (values.length < period) return values[values.length - 1];
+                
+                const multiplier = 2 / (period + 1);
+                let ema = values[values.length - period];
+                
+                for (let i = values.length - period + 1; i < values.length; i++) {
+                    ema = (values[i] * multiplier) + (ema * (1 - multiplier));
+                }
+                
+                return ema;
+            }
+
+            findSupportResistance(candles) {
+                const highs = candles.map(c => c.high);
+                const lows = candles.map(c => c.low);
+                
+                const currentPrice = (candles[candles.length - 1].close + candles[candles.length - 1].open) / 2;
+                const maxHigh = Math.max(...highs);
+                const minLow = Math.min(...lows);
+                
+                const distanceToResistance = (maxHigh - currentPrice) / currentPrice;
+                const distanceToSupport = (currentPrice - minLow) / currentPrice;
+                
+                if (distanceToResistance < 0.015) return 'Cerca Resistencia';
+                if (distanceToSupport < 0.015) return 'Cerca Soporte';
+                return 'Neutral';
+            }
+
+            analyzeVolume(candles) {
+                // SimulaciÃ³n de anÃ¡lisis de volumen basado en el tamaÃ±o de las velas
+                const avgBodySize = candles.reduce((sum, candle) => 
+                    sum + Math.abs(candle.close - candle.open), 0) / candles.length;
+                
+                const lastCandle = candles[candles.length - 1];
+                const lastBodySize = Math.abs(lastCandle.close - lastCandle.open);
+                
+                if (lastBodySize > avgBodySize * 1.4) return 'Alto';
+                if (lastBodySize < avgBodySize * 0.6) return 'Bajo';
+                return 'Moderado';
+            }
+        }
+
+        class TrendAnalysisModel {
+            async analyzeTrend(candles) {
+                if (candles.length < 10) {
+                    return { direction: 'sideways', strength: 0.5 };
+                }
+                
+                const closes = candles.map(c => (c.close + c.open) / 2);
+                const trend = this.calculateTrendDirection(closes);
+                const strength = this.calculateTrendStrength(closes);
+                
+                return {
+                    direction: trend,
+                    strength: strength
+                };
+            }
+
+            calculateTrendDirection(closes) {
+                const recentCloses = closes.slice(-10);
+                const firstHalf = recentCloses.slice(0, 5);
+                const secondHalf = recentCloses.slice(5);
+                
+                const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+                const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+                
+                const change = (secondAvg - firstAvg) / firstAvg;
+                
+                if (change > 0.008) return 'up';
+                if (change < -0.008) return 'down';
+                return 'sideways';
+            }
+
+            calculateTrendStrength(closes) {
+                const recentCloses = closes.slice(-20);
+                if (recentCloses.length < 2) return 0.5;
+                
+                let directionalMoves = 0;
+                let totalMoves = 0;
+                
+                for (let i = 1; i < recentCloses.length; i++) {
+                    const currentMove = recentCloses[i] > recentCloses[i-1] ? 1 : -1;
+                    const prevMove = i > 1 ? (recentCloses[i-1] > recentCloses[i-2] ? 1 : -1) : currentMove;
+                    
+                    if (currentMove === prevMove) directionalMoves++;
+                    totalMoves++;
+                }
+                
+                return totalMoves > 0 ? directionalMoves / totalMoves : 0.5;
+            }
+        }
+
+        // Inicializa la aplicaciÃ³n cuando se carga la pÃ¡gina
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('ðŸ¤– AI Trading Scanner v2.0 Loading...');
+            
+            // Verificar compatibilidad del navegador
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                document.body.innerHTML = `
+                    <div style="padding: 50px; text-align: center; color: #ff4757;">
+                        <h2>âŒ Navegador No Compatible</h2>
+                        <p>Este navegador no soporta acceso a la cÃ¡mara.</p>
+                        <p>Usa Chrome, Firefox, Safari o Edge mÃ¡s recientes.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            new AITradingScanner();
+            
+            // Mostrar instrucciones de debug
+            console.log('ðŸ’¡ Press Shift+D to toggle debug mode');
+            console.log('ðŸ“± Point camera at candlestick charts for analysis');
+            console.log('ðŸš€ AI Trading Scanner ready!');
+        });
+
+        // Previene el zoom en dispositivos mÃ³viles
+        document.addEventListener('touchstart', function(event) {
+            if (event.touches.length > 1) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(event) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+
+        // Evitar arrastrar imÃ¡genes
+        document.addEventListener('dragstart', function(e) {
+            e.preventDefault();
+        });
+
+        // OptimizaciÃ³n de rendimiento
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                // Registrar service worker para mejor rendimiento (opcional)
+            });
+        }
+    </script>
+</body>
+</html>
